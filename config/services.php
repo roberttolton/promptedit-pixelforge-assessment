@@ -14,6 +14,13 @@ return [
     |
     */
 
+    'pixelforge' => [
+        'base_url' => env('PIXEL_FORGE_BASE_URL', 'https://pixelforge.promptedit.dev/v1'),
+        'api_key' => env('PIXEL_FORGE_API_KEY'),
+        'webhook_secret' => env('PIXEL_FORGE_WEBHOOK_SIGNING_SECRET'),
+        'markup_basis_points' => (int) env('PIXEL_FORGE_MARKUP_BASIS_POINTS', 2500), // 2500 = 25%
+    ],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],
