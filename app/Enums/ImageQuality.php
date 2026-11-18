@@ -9,4 +9,9 @@ enum ImageQuality: string
     case MEDIUM = 'medium';
 
     case HIGH = 'high';
+
+    public function label(): string
+    {
+        return ucfirst($this->value);
+    }
 }

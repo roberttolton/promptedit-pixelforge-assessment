@@ -37,6 +37,28 @@ class GenerationFactory extends Factory
         ];
     }
 
+    public function charged(int $chargedCost): static
+    {
+        return $this->succeeded()->state(fn () => ['charged_cost' => $chargedCost]);
+    }
+
+    public function withImage(): static
+    {
+        return $this->succeeded()->state(fn (array $attributes) => [
+            'image_path' => fake()->uuid().'/'.fake()->uuid().'/'.fake()->uuid().'.png',
+        ]);
+    }
+
+    public function failed(string $message = 'The model could not produce an image.'): static
+    {
+        return $this->state(fn () => [
+            'status' => GenerationStatus::FAILED,
+            'error_code' => 'generation_failed',
+            'error_message' => $message,
+            'completed_at' => now(),
+        ]);
+    }
+
     public function succeeded(): static
     {
         return $this->state(fn () => [

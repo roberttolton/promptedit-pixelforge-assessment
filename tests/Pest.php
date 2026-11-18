@@ -46,6 +46,16 @@ expect()->extend('toBeOne', function () {
 |
 */
 
+/**
+ * Fakes only the pricing endpoint with the real response captured from Pixelforge.
+ */
+function fakePricingEndpoint(): void
+{
+    Http::fake([
+        '*/pricing' => Http::response(file_get_contents(__DIR__.'/Fixtures/pixelforge-pricing.json'), 200, ['Content-Type' => 'application/json']),
+    ]);
+}
+
 function something()
 {
     // ..

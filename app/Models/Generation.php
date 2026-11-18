@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\GenerationStatus;
+use App\Enums\ImageAvailability;
 use App\Enums\ImageQuality;
 use App\Enums\ImageSize;
 use App\Enums\Provider;
@@ -47,6 +48,9 @@ use Illuminate\Support\Carbon;
 #[Guarded([])]
 class Generation extends Model
 {
+    /** How long a succeeded generation may wait for its image copy before it counts as unavailable. */
+    public const int IMAGE_PREPARING_MINUTES = 10;
+
     /** @use HasFactory<GenerationFactory> */
     use HasFactory, HasUuids;
 
@@ -88,5 +92,23 @@ class Generation extends Model
                 'error_message' => $message,
                 'completed_at' => now(),
             ]);
+    }
+
+    /**
+     * Null until the generation has succeeded.
+     */
+    public function imageAvailability(): ?ImageAvailability
+    {
+        if ($this->status !== GenerationStatus::SUCCEEDED) {
+            return null;
+        }
+
+        if ($this->image_path !== null) {
+            return ImageAvailability::READY;
+        }
+
+        $isRecent = $this->completed_at?->gt(now()->subMinutes(self::IMAGE_PREPARING_MINUTES)) ?? false;
+
+        return $isRecent ? ImageAvailability::PREPARING : ImageAvailability::UNAVAILABLE;
     }
 }
