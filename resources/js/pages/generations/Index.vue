@@ -136,7 +136,11 @@ function formatDate(value: string): string {
                                 'The generation failed.'
                             }}
                             <span
-                                v-if="!/charged/i.test(generation.error_message ?? '')"
+                                v-if="
+                                    !/charged/i.test(
+                                        generation.error_message ?? '',
+                                    )
+                                "
                                 class="text-muted-foreground"
                             >
                                 You were not charged.
