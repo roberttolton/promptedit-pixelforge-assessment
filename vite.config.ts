@@ -6,6 +6,9 @@ import laravel from 'laravel-vite-plugin';
 import { bunny } from 'laravel-vite-plugin/fonts';
 import { defineConfig, lazyPlugins } from 'vite-plus';
 
+// Inside DDEV the browser reaches Vite through the DDEV router on port 5173, not 0.0.0.0.
+const ddevUrl = process.env.DDEV_PRIMARY_URL?.replace(/:\d+$/, '');
+
 export default defineConfig({
     plugins: lazyPlugins(() => [
         laravel({
@@ -33,6 +36,10 @@ export default defineConfig({
     ]),
     server: {
         host: '0.0.0.0',
+        ...(ddevUrl && {
+            origin: `${ddevUrl}:5173`,
+            cors: { origin: /^https?:\/\/([\w-]+\.)*ddev\.site(:\d+)?$/ },
+        }),
         watch: {
             ignored: [
                 '**/.agents/**',
