@@ -45,7 +45,15 @@ Run npm through `ddev npm`.
 
 **The admin report matches Pixelforge.** `/admin/spend` shows what users paid, provider cost and profit per UTC day and user, and compares each day's provider cost with `GET /v1/usage`. Days use the UTC completion day, which is how Pixelforge bills. Admin routes share one guarded group, and non-admins get a 404. Make an admin with `php artisan users:make-admin <email>`.
 
-**Database for cache, session and queue.** Suitable for this assessment, not something I would run in production.
+## Trade-offs
+
+- **Authentication is deliberately minimal.** Fortify is cut down to registration, password login and password reset. Email verification, two-factor authentication and passkeys are disabled to keep a straightforward login for the assessment. Password reset is enabled, but no mail service is configured on the deployed app, so it sends nothing there.
+- **Database for cache, session and queue.** Suitable for this assessment, not something I would run in production.
+- **One queue worker and the scheduler share the app instance.** No autoscaling, and no dedicated queue service.
+- **Estimates are ranges, not predictions.** Text tokens use a published ratio and reasoning tokens are random, so a generation can cost more than its estimated maximum (see the negative balance note above).
+- **Credits are fake.** There is no payment provider, refund or credit expiry.
+- **The spend report has no pagination** and, like `/v1/usage`, covers at most 92 days.
+- **Generated images are kept forever.** There is no retention or cleanup.
 
 ## Checks
 
