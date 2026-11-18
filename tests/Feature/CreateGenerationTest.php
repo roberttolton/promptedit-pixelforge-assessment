@@ -69,3 +69,27 @@ it('fails a rejected prompt for free', function () {
         ->and($generation->error_code)->toBe('content_policy_violation')
         ->and($generation->charged_cost)->toBeNull();
 });
+
+it('fails the generation on the last attempt when Pixelforge stays overloaded', function () {
+    fakePixelforge([Http::response(['error' => ['code' => 'overloaded', 'message' => 'Busy']], 503)]);
+    $generation = Generation::factory()->create(['status' => GenerationStatus::PENDING]);
+
+    $job = (new SubmitGeneration($generation))->withFakeQueueInteractions();
+    $job->job->attempts = $job->tries;
+    $job->handle(app(PixelforgeClient::class));
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::FAILED)
+        ->and($generation->error_code)->toBe('overloaded')
+        ->and($generation->charged_cost)->toBeNull();
+});
+
+it('leaves the generation pending on the last attempt after an unexplained server error', function () {
+    fakePixelforge([Http::response('oops', 500)]);
+    $generation = Generation::factory()->create(['status' => GenerationStatus::PENDING]);
+
+    $job = (new SubmitGeneration($generation))->withFakeQueueInteractions();
+    $job->job->attempts = $job->tries;
+    $job->handle(app(PixelforgeClient::class));
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::PENDING);
+});

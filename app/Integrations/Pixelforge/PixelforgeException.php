@@ -36,6 +36,15 @@ class PixelforgeException extends RuntimeException
 
     public function isRetryable(): bool
     {
-        return in_array($this->errorCode, self::RETRYABLE_ERROR_CODES, true) || $this->status >= 500;
+        return $this->isExplicitRejection() || $this->status >= 500;
+    }
+
+    /**
+     * Pixelforge named the reason and did not accept the request, so giving up is safe.
+     * An unnamed 5xx may have been accepted anyway.
+     */
+    public function isExplicitRejection(): bool
+    {
+        return in_array($this->errorCode, self::RETRYABLE_ERROR_CODES, true);
     }
 }

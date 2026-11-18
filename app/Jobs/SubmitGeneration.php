@@ -36,7 +36,9 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
 
         } catch (PixelforgeException $e) {
 
-            if ($e->isRetryable()) {
+            $hasAttemptsLeft = $this->attempts() < $this->tries;
+
+            if ($e->isRetryable() && ($hasAttemptsLeft || ! $e->isExplicitRejection())) {
                 $this->release($e->retryAfter ?? 5);
 
                 return;
@@ -67,9 +69,9 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
     }
 
     /**
-     * Running out of attempts does not fail the generation: the request may have been
-     * accepted anyway. generations:reconcile resubmits it (idempotently) and only gives
-     * up after an hour.
+     * Running out of attempts on an unexplained error does not fail the generation: the request
+     * may have been accepted anyway. generations:reconcile resubmits it (idempotently) and only
+     * gives up after an hour. An explicit rejection (e.g. overloaded) fails it on the last attempt.
      *
      * @return list<int>
      */

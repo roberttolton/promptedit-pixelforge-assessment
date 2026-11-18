@@ -26,8 +26,10 @@ class ReconcileGenerations extends Command
 
     public function handle(PixelforgeClient $client, SyncGeneration $sync): int
     {
-        $this->resubmitStuckPending();
-        $this->pollActive($client, $sync);
+        $resubmitted = $this->resubmitStuckPending();
+        $polled = $this->pollActive($client, $sync);
+
+        $this->components->info("Resubmitted {$resubmitted} stuck pending, polled {$polled} active. Only rows idle for ".self::QUIET_MINUTES.'+ minutes are touched.');
 
         return self::SUCCESS;
     }
@@ -36,11 +38,15 @@ class ReconcileGenerations extends Command
      * Resubmitting is safe: the Idempotency-Key is the Generation's UUID, so if Pixelforge
      * already accepted it, that generation is returned and nothing is created or billed twice.
      */
-    private function resubmitStuckPending(): void
+    private function resubmitStuckPending(): int
     {
+        $count = 0;
+
         Generation::where('status', GenerationStatus::PENDING)
             ->where('updated_at', '<', now()->subMinutes(self::QUIET_MINUTES))
-            ->each(function (Generation $generation): void {
+            ->each(function (Generation $generation) use (&$count): void {
+                $count++;
+
                 if ($generation->created_at->lt(now()->subMinutes(self::GIVE_UP_AFTER_MINUTES))) {
                     $generation->failIfPending('submission_failed', 'We could not reach the image service. Nothing was charged.');
 
@@ -49,10 +55,14 @@ class ReconcileGenerations extends Command
 
                 SubmitGeneration::dispatch($generation);
             });
+
+        return $count;
     }
 
-    private function pollActive(PixelforgeClient $client, SyncGeneration $sync): void
+    private function pollActive(PixelforgeClient $client, SyncGeneration $sync): int
     {
+        $polled = 0;
+
         $generations = Generation::whereIn('status', [GenerationStatus::QUEUED, GenerationStatus::PROCESSING])
             ->whereNotNull('provider_reference')
             ->where('updated_at', '<', now()->subMinutes(self::QUIET_MINUTES))
@@ -61,20 +71,24 @@ class ReconcileGenerations extends Command
             ->get();
 
         foreach ($generations as $generation) {
+            $polled++;
+
             try {
                 $sync($client->getGeneration($generation->provider_reference));
             } catch (PixelforgeException $e) {
                 if ($e->errorCode === 'rate_limit_exceeded') {
-                    return;
+                    return $polled;
                 }
 
                 Log::warning('Could not poll Pixelforge generation.', ['generation_id' => $generation->id, 'error' => $e->getMessage()]);
             } catch (ConnectionException) {
-                return;
+                return $polled;
             }
 
             // Move still-unfinished rows to the back of the queue so one slow job can't starve the rest.
             $generation->touch();
         }
+
+        return $polled;
     }
 }
