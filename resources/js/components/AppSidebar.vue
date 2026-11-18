@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { BarChart3, History, ImagePlus } from '@lucide/vue';
+import { BarChart3, History, ImagePlus, Wallet } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import { spend } from '@/routes/admin';
+import { index as creditsIndex } from '@/routes/credits';
 import { create } from '@/routes/generations';
 import type { NavItem } from '@/types';
 
@@ -30,6 +31,11 @@ const mainNavItems: NavItem[] = [
         title: 'New generation',
         href: create(),
         icon: ImagePlus,
+    },
+    {
+        title: 'Credits',
+        href: creditsIndex(),
+        icon: Wallet,
     },
 ];
 

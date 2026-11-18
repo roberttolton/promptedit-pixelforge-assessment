@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm, useHttp, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm, useHttp, usePage } from '@inertiajs/vue3';
 import { watchDebounced } from '@vueuse/core';
 import { computed, ref } from 'vue';
 import GenerationController from '@/actions/App/Http/Controllers/GenerationController';
@@ -25,8 +25,9 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { index as creditsIndex } from '@/routes/credits';
 import { create } from '@/routes/generations';
-import type { Estimate, Option } from '@/types';
+import type { Estimate, EstimateResponse, Option } from '@/types';
 
 defineOptions({
     layout: {
@@ -62,6 +63,7 @@ form.transform((data) => ({
 // Not tied to a field (pricing is down), so it arrives only in the shared errors.
 const page = usePage();
 const pricingError = computed(() => page.props.errors.pricing);
+const creditsError = computed(() => page.props.errors.credits);
 
 const referenceImagesError = computed(
     () =>
@@ -70,7 +72,9 @@ const referenceImagesError = computed(
         )?.[1],
 );
 
-const canSubmit = computed(() => form.prompt.trim() !== '' && !form.processing);
+const canSubmit = computed(
+    () => form.prompt.trim() !== '' && !form.processing && canAfford.value,
+);
 
 type EstimatePayload = {
     prompt: string;
@@ -79,7 +83,7 @@ type EstimatePayload = {
     reference_images: string[];
 };
 
-const estimateRequest = useHttp<EstimatePayload, { estimate: Estimate }>({
+const estimateRequest = useHttp<EstimatePayload, EstimateResponse>({
     prompt: '',
     size: '',
     quality: '',
@@ -87,6 +91,8 @@ const estimateRequest = useHttp<EstimatePayload, { estimate: Estimate }>({
 });
 
 const estimate = ref<Estimate | null>(null);
+const available = ref<string | null>(null);
+const canAfford = ref(true);
 const estimateError = ref<string | null>(null);
 const isEstimating = ref(false);
 let latestEstimateId = 0;
@@ -95,6 +101,7 @@ async function refreshEstimate(): Promise<void> {
     if (form.prompt.trim() === '') {
         latestEstimateId++;
         estimate.value = null;
+        canAfford.value = true;
         estimateError.value = null;
         isEstimating.value = false;
 
@@ -116,6 +123,8 @@ async function refreshEstimate(): Promise<void> {
 
         if (estimateId === latestEstimateId) {
             estimate.value = response.estimate;
+            available.value = response.available;
+            canAfford.value = response.can_afford;
             estimateError.value = null;
         }
     } catch {
@@ -162,6 +171,11 @@ function submit(): void {
                     v-if="pricingError"
                     :errors="[pricingError]"
                     title="Could not submit"
+                />
+                <AlertError
+                    v-if="creditsError"
+                    :errors="[creditsError]"
+                    title="Not enough credits"
                 />
 
                 <div class="grid gap-2">
@@ -280,6 +294,34 @@ function submit(): void {
                     <p v-else class="text-sm text-muted-foreground">
                         Enter a prompt to see an estimate.
                     </p>
+
+                    <div class="space-y-1 border-t pt-4 text-sm">
+                        <p class="flex justify-between">
+                            <span class="text-muted-foreground">
+                                Available credits
+                            </span>
+                            <span
+                                class="font-medium tabular-nums"
+                                :title="page.props.credits?.balance_exact"
+                            >
+                                {{ available ?? page.props.credits?.balance }}
+                            </span>
+                        </p>
+                        <p v-if="!canAfford" class="text-destructive">
+                            Not enough credits to cover the most this could
+                            cost.
+                            <Link
+                                :href="creditsIndex()"
+                                class="font-medium underline"
+                            >
+                                Buy credits
+                            </Link>
+                        </p>
+                        <p v-else class="text-xs text-muted-foreground">
+                            You need enough to cover the maximum shown. You are
+                            only charged what it actually costs.
+                        </p>
+                    </div>
 
                     <ul
                         class="list-inside list-disc space-y-1 text-xs text-muted-foreground"

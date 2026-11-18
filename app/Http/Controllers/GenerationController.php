@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CreateGeneration;
+use App\Credits\InsufficientCreditsException;
 use App\Enums\ImageQuality;
 use App\Enums\ImageSize;
 use App\Http\Requests\StoreGenerationRequest;
 use App\Http\Resources\GenerationResource;
+use App\Pricing\Money;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\RedirectResponse;
@@ -45,6 +47,13 @@ class GenerationController extends Controller
                 $request->imageQuality(),
                 $request->referenceImages(),
             );
+        } catch (InsufficientCreditsException $e) {
+            throw ValidationException::withMessages([
+                'credits' => __('Not enough credits: this could cost up to :needed and you have :available available. Buy credits to continue.', [
+                    'needed' => Money::format($e->needed),
+                    'available' => Money::format($e->available),
+                ]),
+            ]);
         } catch (ConnectionException|RequestException|UnexpectedValueException) {
             throw ValidationException::withMessages([
                 'pricing' => __('Pricing is temporarily unavailable, so nothing was submitted. Please try again in a moment.'),

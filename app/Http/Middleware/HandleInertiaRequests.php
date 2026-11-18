@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Pricing\Money;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -41,6 +42,11 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            'credits' => fn () => $request->user() ? [
+                'balance' => Money::format($request->user()->balance),
+                'balance_exact' => Money::formatExact(abs($request->user()->balance)),
+                'is_negative' => $request->user()->balance < 0,
+            ] : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

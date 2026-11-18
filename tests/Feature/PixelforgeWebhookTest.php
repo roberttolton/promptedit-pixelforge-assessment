@@ -1,13 +1,19 @@
 <?php
 
+use App\Credits\Ledger;
+use App\Enums\CreditPack;
+use App\Enums\CreditTransactionType;
 use App\Enums\GenerationStatus;
 use App\Enums\WebhookOutcome;
 use App\Jobs\DownloadGenerationImage;
+use App\Models\CreditTransaction;
 use App\Models\Generation;
+use App\Models\User;
 use App\Models\Webhook;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 
 beforeEach(function () {
@@ -175,4 +181,56 @@ it('fails loudly and never charges a succeeded event with no usage', function ()
     expect($generation->refresh()->charged_cost)->toBeNull()
         ->and($generation->status)->toBe(GenerationStatus::QUEUED)
         ->and(Webhook::sole()->outcome)->toBe(WebhookOutcome::FAILED);
+});
+
+describe('credits', function () {
+    it('debits the charged amount from the balance once, with one ledger entry', function () {
+        $user = User::factory()->withCredits(1_000_000_000)->create();
+        $generation = Generation::factory()->for($user)->create(['provider_reference' => 'gen_1']);
+
+        postEvent('evt_1', 'generation.succeeded', succeededObject($generation))->assertNoContent();
+
+        $entry = CreditTransaction::sole();
+
+        // Charged 404_750_000 (see the pricing test above).
+        expect($user->refresh()->balance)->toBe(595_250_000)
+            ->and($entry->type)->toBe(CreditTransactionType::CHARGE)
+            ->and($entry->amount)->toBe(-404_750_000)
+            ->and($entry->generation_id)->toBe($generation->id);
+    });
+
+    it('does not debit again for a redelivered or re-sent succeeded event', function () {
+        $user = User::factory()->withCredits(1_000_000_000)->create();
+        $generation = Generation::factory()->for($user)->create(['provider_reference' => 'gen_1']);
+
+        postEvent('evt_1', 'generation.succeeded', succeededObject($generation))->assertNoContent();
+        postEvent('evt_1', 'generation.succeeded', succeededObject($generation))->assertNoContent();
+        postEvent('evt_2', 'generation.succeeded', succeededObject($generation))->assertNoContent();
+
+        expect($user->refresh()->balance)->toBe(595_250_000)
+            ->and(CreditTransaction::count())->toBe(1);
+    });
+
+    it('does not debit anything when a generation fails', function () {
+        $user = User::factory()->withCredits(1_000_000_000)->create();
+        $generation = Generation::factory()->for($user)->create(['provider_reference' => 'gen_1']);
+
+        postEvent('evt_1', 'generation.failed', ['id' => 'gen_1', 'status' => 'failed', 'metadata' => ['generation_id' => $generation->id], 'error' => ['code' => 'generation_failed', 'message' => 'No image.']])->assertNoContent();
+
+        expect($user->refresh()->balance)->toBe(1_000_000_000)
+            ->and(CreditTransaction::count())->toBe(0);
+    });
+
+    it('keeps the balance equal to the sum of the ledger', function () {
+        $user = User::factory()->create();
+        $first = Generation::factory()->for($user)->create(['provider_reference' => 'gen_1']);
+        $second = Generation::factory()->for($user)->create(['provider_reference' => 'gen_2']);
+        app(Ledger::class)->purchase($user, CreditPack::FIVE_DOLLARS, (string) Str::uuid());
+
+        postEvent('evt_1', 'generation.succeeded', succeededObject($first, 'gen_1'))->assertNoContent();
+        postEvent('evt_2', 'generation.succeeded', succeededObject($second, 'gen_2'))->assertNoContent();
+
+        expect($user->refresh()->balance)->toBe(5_000_000_000 - 2 * 404_750_000)
+            ->and((int) CreditTransaction::sum('amount'))->toBe($user->balance);
+    });
 });

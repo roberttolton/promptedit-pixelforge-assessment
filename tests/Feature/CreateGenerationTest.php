@@ -21,7 +21,7 @@ function fakePixelforge(array $generationsResponse): void
 
 function createGeneration(string $prompt = 'A lighthouse'): Generation
 {
-    return app(CreateGeneration::class)(User::factory()->create(), $prompt, ImageSize::SQUARE, ImageQuality::MEDIUM);
+    return app(CreateGeneration::class)(User::factory()->withCredits(10_000_000_000)->create(), $prompt, ImageSize::SQUARE, ImageQuality::MEDIUM);
 }
 
 it('stores the estimate and snapshots, then submits idempotently', function () {

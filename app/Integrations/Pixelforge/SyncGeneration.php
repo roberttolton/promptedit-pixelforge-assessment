@@ -2,6 +2,7 @@
 
 namespace App\Integrations\Pixelforge;
 
+use App\Credits\Ledger;
 use App\Enums\GenerationStatus;
 use App\Enums\GenerationSyncResult;
 use App\Enums\Provider;
@@ -27,6 +28,7 @@ class SyncGeneration
     public function __construct(
         private readonly Pricing $pricing,
         private readonly PixelforgeClient $client,
+        private readonly Ledger $ledger,
     ) {}
 
     /**
@@ -62,6 +64,10 @@ class SyncGeneration
 
             $generation->status = $target;
             $generation->save();
+
+            if ($target === GenerationStatus::SUCCEEDED) {
+                $this->ledger->charge($generation);
+            }
 
             return GenerationSyncResult::APPLIED;
 

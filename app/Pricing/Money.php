@@ -18,6 +18,10 @@ final class Money
      */
     public static function format(int $nanodollars, int $decimals = 4): string
     {
+        if ($nanodollars < 0) {
+            return '-'.self::format(-$nanodollars, $decimals);
+        }
+
         $nanodollarsPerUnit = 10 ** (self::NANODOLLAR_DECIMALS - $decimals);
         $units = intdiv($nanodollars + intdiv($nanodollarsPerUnit, 2), $nanodollarsPerUnit);
         $unitsPerDollar = 10 ** $decimals;

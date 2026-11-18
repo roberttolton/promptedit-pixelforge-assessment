@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\SpendReportController;
+use App\Http\Controllers\CreditController;
 use App\Http\Controllers\GenerationController;
 use App\Http\Controllers\GenerationEstimateController;
 use App\Http\Controllers\GenerationImageController;
@@ -20,6 +21,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('generations/estimate', GenerationEstimateController::class)
         ->middleware('throttle:60,1')
         ->name('generations.estimate');
+
+    Route::get('credits', [CreditController::class, 'index'])->name('credits.index');
+
+    Route::post('credits', [CreditController::class, 'store'])->name('credits.store');
 
     Route::get('generations/{generation}/image', GenerationImageController::class)
         ->can('view', 'generation')

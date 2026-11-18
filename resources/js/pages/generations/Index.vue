@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, usePoll } from '@inertiajs/vue3';
+import { Head, Link, usePage, usePoll } from '@inertiajs/vue3';
 import { ImageOff, ImagePlus } from '@lucide/vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import GenerationStatusBadge from '@/components/GenerationStatusBadge.vue';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { dashboard } from '@/routes';
+import { index as creditsIndex } from '@/routes/credits';
 import { create } from '@/routes/generations';
 import type { Generation, Paginated } from '@/types';
 
@@ -26,9 +27,11 @@ const hasActiveGeneration = computed(() =>
     props.generations.data.some((generation) => generation.is_active),
 );
 
+const page = usePage();
+
 const { start, stop } = usePoll(
     3000,
-    { only: ['generations'] },
+    { only: ['generations', 'credits'] },
     { autoStart: false },
 );
 
@@ -58,12 +61,32 @@ function formatDate(value: string): string {
                 title="History"
                 description="Your generations, their status and what each one cost."
             />
-            <Button as-child>
-                <Link :href="create()">
-                    <ImagePlus />
-                    New generation
+            <div class="flex shrink-0 items-center gap-3">
+                <Link
+                    :href="creditsIndex()"
+                    class="text-right text-sm"
+                    title="Your credit balance. Click to buy more."
+                >
+                    <span class="block text-xs text-muted-foreground">
+                        Credits
+                    </span>
+                    <span
+                        class="font-medium tabular-nums"
+                        :class="{
+                            'text-destructive': page.props.credits?.is_negative,
+                        }"
+                        :title="page.props.credits?.balance_exact"
+                    >
+                        {{ page.props.credits?.balance }}
+                    </span>
                 </Link>
-            </Button>
+                <Button as-child>
+                    <Link :href="create()">
+                        <ImagePlus />
+                        New generation
+                    </Link>
+                </Button>
+            </div>
         </div>
 
         <Card

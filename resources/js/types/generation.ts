@@ -36,7 +36,26 @@ export type Estimate = {
     max: string;
 };
 
+export type EstimateResponse = {
+    estimate: Estimate;
+    available: string;
+    can_afford: boolean;
+};
+
 export type Option = {
     value: string;
     label: string;
+};
+
+export type CreditPack = {
+    value: string;
+    label: string;
+};
+
+export type CreditTransaction = {
+    id: string;
+    type: 'purchase' | 'charge';
+    amount: string;
+    amount_exact: string;
+    created_at: string;
 };

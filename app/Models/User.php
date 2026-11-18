@@ -19,6 +19,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property bool $is_admin
+ * @property int $balance Nanodollars of credit; may dip below zero if a generation costs more than its estimated maximum.
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
@@ -34,6 +35,13 @@ class User extends Authenticatable
     use HasFactory, HasUuids, Notifiable;
 
     /**
+     * Matches the column default, so a freshly created model has a balance without a reload.
+     *
+     * @var array<string, int>
+     */
+    protected $attributes = ['balance' => 0];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -44,7 +52,14 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'balance' => 'integer',
         ];
+    }
+
+    /** @return HasMany<CreditTransaction, $this> */
+    public function creditTransactions(): HasMany
+    {
+        return $this->hasMany(CreditTransaction::class);
     }
 
     /** @return HasMany<Generation, $this> */

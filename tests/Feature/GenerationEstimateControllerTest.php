@@ -8,7 +8,7 @@ it('redirects guests to the login page', function () {
 });
 
 it('returns the estimated range with the markup applied', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->withCredits(1_000_000_000)->create();
     fakePricingEndpoint();
 
     $response = $this->actingAs($user)->postJson(route('generations.estimate'), [
@@ -21,7 +21,23 @@ it('returns the estimated range with the markup applied', function () {
     // Provider cost 0.286225 / 0.330050 / 0.373875 USD, plus 25%, rounded half up to 4 decimals.
     $response->assertOk()->assertExactJson([
         'estimate' => ['min' => '$0.3578', 'expected' => '$0.4126', 'max' => '$0.4673'],
+        'available' => '$1.0000',
+        'can_afford' => true,
     ]);
+});
+
+it('says the user cannot afford it when their credits are below the maximum', function () {
+    $user = User::factory()->withCredits(100_000_000)->create();
+    fakePricingEndpoint();
+
+    $response = $this->actingAs($user)->postJson(route('generations.estimate'), [
+        'prompt' => str_repeat('a', 400),
+        'size' => '1536x1024',
+        'quality' => 'high',
+        'reference_images' => ['https://example.com/a.png', 'https://example.com/b.png'],
+    ]);
+
+    $response->assertOk()->assertJson(['available' => '$0.1000', 'can_afford' => false]);
 });
 
 it('returns 503 with a message when pricing cannot be fetched', function () {

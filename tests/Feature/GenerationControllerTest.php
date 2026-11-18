@@ -127,7 +127,7 @@ describe('new generation form', function () {
 
 describe('submitting a generation', function () {
     it('saves a pending generation with its estimate, queues the submission and redirects to the history', function () {
-        $user = User::factory()->create();
+        $user = User::factory()->withCredits(1_000_000_000)->create();
         fakePricingEndpoint();
         Queue::fake(SubmitGeneration::class);
 
@@ -204,5 +204,59 @@ describe('submitting a generation', function () {
         $response->assertInvalid(['pricing' => 'Pricing is temporarily unavailable, so nothing was submitted. Please try again in a moment.']);
         $this->assertDatabaseCount('generations', 0);
         Queue::assertNothingPushed();
+    });
+
+    it('refuses to submit when the credits cannot cover the most it could cost, and creates nothing', function () {
+        $user = User::factory()->withCredits(457_087_499)->create();
+        fakePricingEndpoint();
+        Queue::fake(SubmitGeneration::class);
+
+        $response = $this->actingAs($user)->post(route('generations.store'), [
+            'prompt' => 'A lighthouse',
+            'size' => '1536x1024',
+            'quality' => 'high',
+            'reference_images' => ['https://example.com/a.png'],
+        ]);
+
+        // The maximum is 457_087_500 nanodollars; one nanodollar short is not enough.
+        $response->assertInvalid(['credits' => 'Not enough credits: this could cost up to $0.4571 and you have $0.4571 available. Buy credits to continue.']);
+        $this->assertDatabaseCount('generations', 0);
+        Queue::assertNothingPushed();
+    });
+
+    it('accepts a submission when the credits exactly cover the most it could cost', function () {
+        $user = User::factory()->withCredits(457_087_500)->create();
+        fakePricingEndpoint();
+        Queue::fake(SubmitGeneration::class);
+
+        $this->actingAs($user)->post(route('generations.store'), [
+            'prompt' => 'A lighthouse',
+            'size' => '1536x1024',
+            'quality' => 'high',
+            'reference_images' => ['https://example.com/a.png'],
+        ])->assertRedirect(route('dashboard'));
+
+        expect($user->generations()->count())->toBe(1);
+    });
+
+    it('counts generations still in progress against the credits, but not finished ones', function () {
+        $user = User::factory()->withCredits(500_000_000)->create();
+        fakePricingEndpoint();
+        Queue::fake(SubmitGeneration::class);
+        // An unfinished generation could still cost up to 100_000_000 (the factory default); finished ones hold nothing.
+        Generation::factory()->for($user)->create(['status' => GenerationStatus::PROCESSING, 'estimated_cost_max' => 100_000_000]);
+        Generation::factory()->for($user)->succeeded()->create(['estimated_cost_max' => 900_000_000]);
+        Generation::factory()->for($user)->failed()->create(['estimated_cost_max' => 900_000_000]);
+        Generation::factory()->create(['status' => GenerationStatus::PROCESSING, 'estimated_cost_max' => 900_000_000]);
+
+        $response = $this->actingAs($user)->post(route('generations.store'), [
+            'prompt' => 'A lighthouse',
+            'size' => '1536x1024',
+            'quality' => 'high',
+            'reference_images' => ['https://example.com/a.png'],
+        ]);
+
+        // 500_000_000 - 100_000_000 = 400_000_000 available, below the 457_087_500 maximum.
+        $response->assertInvalid(['credits' => 'Not enough credits: this could cost up to $0.4571 and you have $0.4000 available. Buy credits to continue.']);
     });
 });

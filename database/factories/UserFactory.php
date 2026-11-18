@@ -33,6 +33,14 @@ class UserFactory extends Factory
         ];
     }
 
+    /**
+     * @param  int  $nanodollars  Credit balance.
+     */
+    public function withCredits(int $nanodollars): static
+    {
+        return $this->state(fn () => ['balance' => $nanodollars]);
+    }
+
     public function admin(): static
     {
         return $this->state(fn () => ['is_admin' => true]);
