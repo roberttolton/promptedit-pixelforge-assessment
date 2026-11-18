@@ -28,3 +28,15 @@ it('throws when pricing has never been fetched and the endpoint is unusable', fu
     'server error' => [fn () => Http::response('boom', 500), RequestException::class],
     'invalid body' => [fn () => Http::response('not json', 200), UnexpectedValueException::class],
 ]);
+
+it('reads what Pixelforge billed per day as nanodollars', function () {
+    Http::fake(['*/usage*' => Http::response(['data' => [
+        ['date' => '2026-11-17', 'cost_usd' => '0.071367500'],
+        ['date' => '2026-11-18', 'cost_usd' => '0.122390000'],
+    ]])]);
+
+    expect(app(PixelforgeClient::class)->usageByDay('2026-11-17', '2026-11-18'))
+        ->toBe(['2026-11-17' => 71_367_500, '2026-11-18' => 122_390_000]);
+
+    Http::assertSent(fn ($request) => $request['start_date'] === '2026-11-17' && $request['end_date'] === '2026-11-18');
+});

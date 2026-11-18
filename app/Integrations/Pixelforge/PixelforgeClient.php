@@ -3,6 +3,7 @@
 namespace App\Integrations\Pixelforge;
 
 use App\Models\Generation;
+use App\Pricing\Money;
 use App\Pricing\PriceList;
 use App\Pricing\Pricing;
 use App\Pricing\Rates;
@@ -75,6 +76,32 @@ class PixelforgeClient
         }
 
         return $response->json();
+    }
+
+    /**
+     * What Pixelforge billed this API key per UTC completion day, as nanodollars.
+     * Days without usage are included with 0.
+     *
+     * @return array<string, int> Keyed by YYYY-MM-DD.
+     *
+     * @throws PixelforgeException
+     * @throws ConnectionException
+     */
+    public function usageByDay(string $startDate, string $endDate): array
+    {
+        $response = $this->http()->get('usage', ['start_date' => $startDate, 'end_date' => $endDate]);
+
+        if ($response->failed()) {
+            throw PixelforgeException::fromResponse($response);
+        }
+
+        $days = [];
+
+        foreach ($response->json('data') ?? throw new UnexpectedValueException('Pixelforge usage response has no data.') as $day) {
+            $days[$day['date']] = Money::parseUsd($day['cost_usd']);
+        }
+
+        return $days;
     }
 
     /**

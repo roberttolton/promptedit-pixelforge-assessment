@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
-import { History, ImagePlus } from '@lucide/vue';
+import { Link, usePage } from '@inertiajs/vue3';
+import { BarChart3, History, ImagePlus } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -14,8 +14,11 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { spend } from '@/routes/admin';
 import { create } from '@/routes/generations';
 import type { NavItem } from '@/types';
+
+const page = usePage();
 
 const mainNavItems: NavItem[] = [
     {
@@ -28,6 +31,10 @@ const mainNavItems: NavItem[] = [
         href: create(),
         icon: ImagePlus,
     },
+];
+
+const adminNavItems: NavItem[] = [
+    { title: 'Spend report', href: spend(), icon: BarChart3 },
 ];
 </script>
 
@@ -47,6 +54,11 @@ const mainNavItems: NavItem[] = [
 
         <SidebarContent>
             <NavMain :items="mainNavItems" />
+            <NavMain
+                v-if="page.props.auth.user.is_admin"
+                label="Admin"
+                :items="adminNavItems"
+            />
         </SidebarContent>
 
         <SidebarFooter>

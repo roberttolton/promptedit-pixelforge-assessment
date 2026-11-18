@@ -2,6 +2,8 @@
 
 namespace App\Pricing;
 
+use UnexpectedValueException;
+
 /**
  * Display formatting for integer nanodollars. Recorded amounts stay exact; only the
  * rendered string is rounded, half up, using integer maths.
@@ -26,5 +28,17 @@ final class Money
     public static function formatExact(int $nanodollars): string
     {
         return self::format($nanodollars, self::NANODOLLAR_DECIMALS);
+    }
+
+    /**
+     * Parses an exact decimal string with nine decimals, as Pixelforge reports cost_usd.
+     */
+    public static function parseUsd(string $usd): int
+    {
+        if (preg_match('/^(\d+)\.(\d{9})$/', $usd, $matches) !== 1) {
+            throw new UnexpectedValueException("Expected a USD amount with nine decimals, got [{$usd}].");
+        }
+
+        return (int) $matches[1] * 10 ** self::NANODOLLAR_DECIMALS + (int) $matches[2];
     }
 }
