@@ -39,6 +39,12 @@ Run npm through `ddev npm`.
 
 **Images** are downloaded to private storage as `{user uuid}/{generation uuid}/{uuid}.png` and served through an authorised route that redirects to a 10-minute signed URL. Another user's generation returns 404.
 
+**Credits are a ledger.** Every purchase and charge is a signed row in `credit_transactions`, and `users.balance` is its running total, updated in the same transaction. A unique key per event (`purchase:{id}`, `charge:{generation id}`) means a double-click or a replayed webhook can't add or debit twice. "Buy credits" is a fake purchase.
+
+**Generating needs enough credits for the worst case.** A submission is refused unless the user's balance, minus the estimated maximum of their unfinished generations, covers this one's estimated maximum. The user row is locked during the check, so simultaneous submissions can't spend the same credits. The real charge can still exceed the estimate, and is recorded anyway, so a balance can dip slightly below zero. Recording every cost exactly matters more than a tidy balance.
+
+**The admin report matches Pixelforge.** `/admin/spend` shows what users paid, provider cost and profit per UTC day and user, and compares each day's provider cost with `GET /v1/usage`. Days use the UTC completion day, which is how Pixelforge bills. Admin routes share one guarded group, and non-admins get a 404. Make an admin with `php artisan users:make-admin <email>`.
+
 **Database for cache, session and queue.** Suitable for this assessment, not something I would run in production.
 
 ## Checks
