@@ -67,7 +67,7 @@ class DownloadGenerationImage implements ShouldBeUnique, ShouldQueue
 
         $path = "{$generation->user_id}/{$generation->id}/".Str::uuid().'.png';
 
-        Storage::put($path, $response->body(), 'private');
+        Storage::put($path, $response->body());
 
         $saved = Generation::whereKey($generation->id)->whereNull('image_path')
             ->update([
