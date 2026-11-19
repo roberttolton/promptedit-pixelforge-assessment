@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Enums\GenerationStatus;
 use App\Integrations\Pixelforge\PixelforgeClient;
 use App\Integrations\Pixelforge\PixelforgeException;
+use App\Integrations\Pixelforge\SyncGeneration;
 use App\Models\Generation;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -24,7 +25,7 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
      * Connection errors and retryable API errors are retried; the Idempotency-Key makes
      * that safe even if the first attempt was accepted but the response was never received.
      */
-    public function handle(PixelforgeClient $client): void
+    public function handle(PixelforgeClient $client, SyncGeneration $sync): void
     {
         if ($this->generation->status !== GenerationStatus::PENDING) {
             return;
@@ -56,11 +57,9 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
                 'provider_reference' => $response['id'],
             ]);
 
-        Generation::whereKey($id)
-            ->where('status', GenerationStatus::PENDING)
-            ->update([
-                'status' => GenerationStatus::from($response['status']),
-            ]);
+        // A replayed idempotent request can return a generation that already finished, so the
+        // response goes through the same path as a webhook: that is what writes the charge.
+        $sync($response);
     }
 
     public function uniqueId(): string

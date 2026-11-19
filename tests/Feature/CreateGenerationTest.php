@@ -5,11 +5,15 @@ use App\Enums\GenerationStatus;
 use App\Enums\ImageQuality;
 use App\Enums\ImageSize;
 use App\Integrations\Pixelforge\PixelforgeClient;
+use App\Integrations\Pixelforge\SyncGeneration;
+use App\Jobs\DownloadGenerationImage;
 use App\Jobs\SubmitGeneration;
+use App\Models\CreditTransaction;
 use App\Models\Generation;
 use App\Models\User;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 
 function fakePixelforge(array $generationsResponse): void
 {
@@ -48,10 +52,44 @@ it('does not move a generation backwards if a webhook already advanced it', func
     // A webhook lands while the job is in flight; the job's in-memory copy is stale.
     Generation::whereKey($generation->id)->update(['status' => GenerationStatus::PROCESSING]);
 
-    (new SubmitGeneration($generation))->handle(app(PixelforgeClient::class));
+    (new SubmitGeneration($generation))->handle(app(PixelforgeClient::class), app(SyncGeneration::class));
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::PROCESSING)
         ->and($generation->provider_reference)->toBe('gen_abc');
+});
+
+it('charges once when the resubmit is replayed and Pixelforge says it already succeeded', function () {
+    Queue::fake([DownloadGenerationImage::class]);
+    fakePixelforge([
+        'id' => 'gen_abc',
+        'status' => 'succeeded',
+        'completed_at' => now()->toIso8601String(),
+        'usage' => ['input_text_tokens' => 100, 'input_image_tokens' => 0, 'output_tokens' => 1000, 'reasoning_tokens' => 0],
+    ]);
+
+    $generation = createGeneration()->refresh();
+
+    expect($generation->status)->toBe(GenerationStatus::SUCCEEDED)
+        ->and($generation->provider_cost)->toBeGreaterThan(0)
+        ->and($generation->charged_cost)->toBeGreaterThan($generation->provider_cost)
+        ->and(CreditTransaction::where('generation_id', $generation->id)->sole()->amount)->toBe(-$generation->charged_cost)
+        ->and($generation->user->refresh()->balance)->toBe(10_000_000_000 - $generation->charged_cost);
+    Queue::assertPushed(DownloadGenerationImage::class);
+});
+
+it('fails for free when the resubmit is replayed and Pixelforge says it already failed', function () {
+    fakePixelforge([
+        'id' => 'gen_abc',
+        'status' => 'failed',
+        'error' => ['code' => 'generation_failed', 'message' => 'No image could be produced.'],
+    ]);
+
+    $generation = createGeneration()->refresh();
+
+    expect($generation->status)->toBe(GenerationStatus::FAILED)
+        ->and($generation->charged_cost)->toBeNull()
+        ->and(CreditTransaction::where('generation_id', $generation->id)->count())->toBe(0)
+        ->and($generation->user->refresh()->balance)->toBe(10_000_000_000);
 });
 
 it('keeps the generation pending when Pixelforge is overloaded', function () {
@@ -76,7 +114,7 @@ it('fails the generation on the last attempt when Pixelforge stays overloaded', 
 
     $job = (new SubmitGeneration($generation))->withFakeQueueInteractions();
     $job->job->attempts = $job->tries;
-    $job->handle(app(PixelforgeClient::class));
+    $job->handle(app(PixelforgeClient::class), app(SyncGeneration::class));
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::FAILED)
         ->and($generation->error_code)->toBe('overloaded')
@@ -89,7 +127,7 @@ it('leaves the generation pending on the last attempt after an unexplained serve
 
     $job = (new SubmitGeneration($generation))->withFakeQueueInteractions();
     $job->job->attempts = $job->tries;
-    $job->handle(app(PixelforgeClient::class));
+    $job->handle(app(PixelforgeClient::class), app(SyncGeneration::class));
 
     expect($generation->refresh()->status)->toBe(GenerationStatus::PENDING);
 });
